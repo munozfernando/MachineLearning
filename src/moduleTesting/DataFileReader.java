@@ -8,6 +8,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Scanner;
 
@@ -16,6 +17,29 @@ public class DataFileReader {
 		//System.out.println(this.getDataFolderPath().toAbsolutePath().toString());
 		
 		Metrics m = new Metrics();
+		
+		
+		Matrix<Integer> matrix = new Matrix<Integer>(5);
+		
+		
+		for(int i = 0; i < matrix.getDimensions(); i++)
+		{
+			ArrayList<Integer> list = matrix.getRow(i);
+			for(int j = 0; j < matrix.getDimensions(); j++) {
+				list.add(j+(i*matrix.getDimensions()));
+			}
+		}
+		
+		System.out.println(matrix);
+		
+		try {
+			matrix.transpose();
+		} catch (Exception e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		
+		System.out.println(matrix);
 		//System.out.println(m.getStdDeviation(Arrays.asList(1.0,2.0,3.0,4.0)));
 		
 		System.out.println(m.getCovariance(Arrays.asList(1.0,2.0,3.0,4.0), Arrays.asList(6.0,7.0,8.0,9.0)));

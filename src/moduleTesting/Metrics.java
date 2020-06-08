@@ -1,8 +1,10 @@
 package moduleTesting;
 
+import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -67,53 +69,104 @@ public class Metrics {
 		return getStdDeviation(getVariance(elements));
 	}
 
-	public double getCovariance(List<Double> vec1, List<Double> vec2) {
+	public <T extends Number> double getCovariance(List<T> vec1, List<T> vec2) {
 
 		if (vec1.size() != vec2.size() || vec1.size() < 1)
 			throw new IllegalArgumentException();
 
-		double mean1 = this.getMean(vec1);
-		double mean2 = this.getMean(vec2);
+		double meanVec1 = Metrics.getMean(vec1);
+		double meanVec2 = Metrics.getMean(vec2);
 
 		double sum = 0;
 
-		Iterator<Double> it1 = vec1.iterator();
-		Iterator<Double> it2 = vec2.iterator();
+		Iterator<T> it1 = vec1.iterator();
+		Iterator<T> it2 = vec2.iterator();
 
 		while (it1.hasNext() && it2.hasNext()) {
 
-			sum += (((it1.next() - mean1) * (it2.next() - mean2)));
+			sum += (((it1.next().doubleValue() - meanVec1) * (it2.next().doubleValue() - meanVec2)));
 		}
 		return sum / (vec1.size() - 1);
 	}
 
-	
-	// Consider fork-join??!?!??
-	public List<List<Double>> getCovarianceMatrix(List<List<Double>> samples) {
+	/**
+	 * This this is fucked. Its really complex and it might have too much overhead.
+	 * I will create another method just like this one, but execute it series and compare...
+	 * @param features
+	 * @return
+	 */
+	 public <T extends Number> Matrix<Double> getCovarianceMatrixConcurrently(List<List<T>> features) {
 
-		ExecutorService pool = Executors.newCachedThreadPool();
+		 /*
+		  * This is the plan
+		  * 1. Create an executor
+		  * 2. Feed Futures into the executor
+		  * 3. Check if all futures have been completed
+		  * 4. Return the cov matrix
+		  */
+		 
+		// 1
+		ExecutorService execService = Executors.newCachedThreadPool();
+		Matrix<Future<Double>> futuresMatrix = new Matrix<>(features.size());
+		List<Future<Double>> futuresList = new ArrayList<>();
 		
-
-		for (int i = 0; i < samples.size(); i++) {
-			for (int j = i + 1; j < samples.size(); j++) {
-				final List<Double> vec1 = samples.get(i);
-				final List<Double> vec2 = samples.get(j);
+		// 2
+		for (int i = 0; i < features.size(); i++) {
+			ArrayList<Future<Double>> covRow = new ArrayList<>();
+			// For a staggered array, put i+1 here
+			for (int j = 0; j < features.size(); j++) {
+				final List<T> vec1 = features.get(i);
+				final List<T> vec2 = features.get(j);
 				
-				Callable<Double> r1 = new Callable<Double>() {
+				Callable<Double> covarianceCallable = new Callable<Double>() {
 					@Override
 					public Double call() throws Exception {
 						return getCovariance(vec1, vec2);
 					}
 				};
-				Future<Double> result = pool.submit(r1);
+				Future<Double> submittedFuture = execService.submit(covarianceCallable);
+				covRow.add(submittedFuture);
+				futuresList.add(submittedFuture);
+			}
+			futuresMatrix.setRow(i, covRow);
+		}
+		execService.shutdown();
+		
+		// 3
+		// Block this thread while we ensure all other threads have finished
+		// NOTE: Should be unnecessary, since when calling future.get(), this thread blocks anyway...
+		boolean hasRunningThread = true;
+		while(hasRunningThread) {
+			hasRunningThread = false;
+			for(Iterator<Future<Double>> futureIter = futuresList.iterator(); futureIter.hasNext() && hasRunningThread == false;) {
+				if(!futureIter.next().isDone()) {
+					hasRunningThread = true;
+				}
 			}
 		}
-		pool.shutdown();
-//		try {
-//			pool.awaitTermination(5, TimeUnit.SECONDS);
-//		} catch (InterruptedException e) {
-//			e.printStackTrace();
-//		}
+		
+		// 4
+		// Map the old matrix into a new one of actual values...
+		Iterator<Future<Double>> futListIter = futuresList.iterator();
+		final Matrix<Double> resultSetMatrix = new Matrix<>(features.size());
+		
+		for(int i = 0; i < futuresMatrix.getDimensions(); i++) {
+			if(futListIter.hasNext()) {
+				try {
+					resultSetMatrix.getRow(i).add(futListIter.next().get());
+				} catch (InterruptedException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				} catch (ExecutionException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
+			}
+		}
+		
+		// Print the matrix and return
+		System.out.println(resultSetMatrix);
+		return resultSetMatrix;
 	}
 
 	public double getAccuracy() {
