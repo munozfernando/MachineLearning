@@ -1,13 +1,14 @@
 package moduleTesting;
 
 import java.util.ArrayList;
+import java.util.Collection;
 
 /**
  * @author Fernando Munoz
  *
  * @param <T> Data type of the matrix
  */
-public class Matrix<T> {
+public class Matrix<T>{
 
 	private final int DIMENSIONS;
 	
