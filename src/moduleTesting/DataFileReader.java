@@ -49,11 +49,11 @@ public class DataFileReader {
 		
 		
 		
-		
+		long start = System.currentTimeMillis();
 		
 		
 		int featureCount = 1000;
-		int featureElementCount = 1000;
+		int featureElementCount = 10000;
 		
 		
 		
@@ -74,6 +74,7 @@ public class DataFileReader {
 		}
 		
 		Metrics.getCovarianceMatrixConcurrently(features);
+		
 		
 		ArrayList<Double> a1 = new ArrayList<Double>() {
 			{

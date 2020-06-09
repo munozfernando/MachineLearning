@@ -63,21 +63,24 @@ public class Matrix<T>{
 		return data.get(rowNdx);
 	}
 
-	public void setRow(int rowNdx, ArrayList<T> sourceRow) throws Exception {
+	public void setRow(int rowNdx, ArrayList<T> sourceRow) {
 		if(sourceRow.size() != this.DIMENSIONS)
 			throw new IllegalArgumentException();
 		this.data.set(rowNdx, sourceRow);
 	}
-
-	// TODO: Set to a valid exception
+	
 	/**
 	 * @param colNdx index of column to replace
 	 * @param sourceColumn an ArrayList to use as source
 	 * @throws Exception
 	 */
-	public void setColumn(int colNdx, ArrayList<T> sourceList) throws Exception {
+	public void setColumn(int colNdx, ArrayList<T> sourceList) {
 		if (sourceList.size() != this.data.size())
-			throw new IllegalArgumentException("Column source length does not match the target");
+		{
+			IllegalArgumentException e = new IllegalArgumentException("Column source length does not match the target");
+			e.printStackTrace();
+			throw e;
+		}
 		
 		for (int i = 0; i < this.data.size(); i++) {
 			ArrayList<T> current = this.data.get(i);

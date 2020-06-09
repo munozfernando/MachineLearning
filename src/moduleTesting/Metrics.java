@@ -8,7 +8,11 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.DoubleStream;
+
+import static java.util.stream.Collectors.*;
 
 public class Metrics {
 
@@ -50,13 +54,11 @@ public class Metrics {
 	}
 
 	public static double getMean(List<? extends Number> elements) {
-
-		double temp = elements.stream().mapToDouble(x -> (double) x).average().getAsDouble();
-		return temp;
+		return elements.stream().mapToDouble(x -> (double) x).average().getAsDouble();
 	}
-	
-	public static List<Double> getMeanList( List<? extends List<? extends Number>> list){
-		return list.stream().map(e -> getMean(e)).collect(Collectors.toList());
+
+	public static List<Double> getMeanList(List<? extends List<? extends Number>> list) {
+		return list.parallelStream().map(e -> getMean(e)).collect(Collectors.toList());
 	}
 
 	public static double getVariance(List<? extends Number> elements) {
@@ -94,21 +96,67 @@ public class Metrics {
 		}
 		return sum / (vec1.size() - 1);
 	}
+	
+	public static <T extends Number> double getCovariance(List<T> vec1, List<T> vec2, List<? extends List<T>> meanList) {
+
+		if (vec1.size() != vec2.size() || vec1.size() < 1)
+			throw new IllegalArgumentException();
+
+		double meanVec1 = Metrics.getMean(vec1);
+		double meanVec2 = Metrics.getMean(vec2);
+
+		double sum = 0;
+
+		Iterator<T> it1 = vec1.iterator();
+		Iterator<T> it2 = vec2.iterator();
+
+		while (it1.hasNext() && it2.hasNext()) {
+
+			sum += (((it1.next().doubleValue() - meanVec1) * (it2.next().doubleValue() - meanVec2)));
+		}
+		return sum / (vec1.size() - 1);
+	}
 
 	/**
-	 * This method returns a co-variance matrix that compares all features against each other.
-	 * Runs concurrently.
-	 * @param <T> Type of actual data 
-	 * @param <L> Type for outer data list
+	 * This method returns a co-variance matrix that compares all features against
+	 * each other. Runs concurrently.
+	 * 
+	 * @param          <T> Type of actual data
+	 * @param          <L> Type for outer data list
 	 * @param features Nested List for data param T
 	 * @return Matrix with covariance values
 	 */
-	public static <T extends Number, L extends List<T>> Matrix<Double> getCovarianceMatrixConcurrently(List<L> features) {
-
-		// 1
+	public static <T extends Number, L extends List<T>> Matrix<Double> getCovarianceMatrixConcurrently(
+			List<L> features) {
+		List<Double> meanList = getMeanList(features);
+		
+		long start = System.currentTimeMillis();
+		Matrix<Double> resultSetMatrix = new Matrix<>(features.size());
+		resultSetMatrix.setData(features.parallelStream().map(
+				featureA -> features.parallelStream().map(
+						featureB -> getCovariance(featureA, featureB))
+							.collect(toCollection(ArrayList::new)))
+								.collect(toCollection(ArrayList::new)));
+		
+		System.out.println("Stream time taken: " + (System.currentTimeMillis()-start));
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		long startExecutorTime = System.currentTimeMillis();
 		ExecutorService execService = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
 		Matrix<Future<Double>> futuresMatrix = new Matrix<>(features.size());
 		List<Future<Double>> futuresList = new ArrayList<>();
+		
+
 		
 		// 2
 		for (int i = 0; i < features.size(); i++) {
@@ -131,26 +179,23 @@ public class Metrics {
 			futuresMatrix.setRow(i, covRow);
 		}
 		execService.shutdown();
+		
+		resultSetMatrix.setData(futuresMatrix.getData().parallelStream()
+				.map((Function<? super ArrayList<Future<Double>>, ? extends ArrayList<Double>>) row -> {
+					return row.parallelStream().map(element -> {
+						Double result = null;
+						try {
+							result = element.get();
+						} catch (InterruptedException | ExecutionException e) {
+							System.out.println("Thread was interrupted or failed to execute");
+							e.printStackTrace();
+							System.exit(-1);
+						}
+						return result;
+					}).collect(toCollection(ArrayList::new));
+				}).collect(toCollection(ArrayList::new)));
+		System.out.println("map matrix stream: " +  (System.currentTimeMillis() - startExecutorTime));
 
-		// 3 & 4
-		// Map the old matrix into a new one of actual values...
-		Iterator<Future<Double>> futListIter = futuresList.iterator();
-		Matrix<Double> resultSetMatrix = new Matrix<>(features.size());
-
-		for (int i = 0; i < futuresMatrix.getDimensions(); i++) {
-			for (int j = 0; j < futuresMatrix.getDimensions(); j++) {
-				try {
-					resultSetMatrix.getRow(i).add(futListIter.next().get());
-				} catch (InterruptedException | ExecutionException e) {
-					System.out.println("Thread was interrupted or failed to execute");
-					e.printStackTrace();
-					System.exit(-1);
-				}
-			}
-		}
-
-		// Print the matrix and return
-		System.out.println(resultSetMatrix);
 		return resultSetMatrix;
 
 	}
