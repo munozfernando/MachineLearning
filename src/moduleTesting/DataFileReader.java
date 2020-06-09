@@ -9,7 +9,9 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Random;
 import java.util.Scanner;
 
 public class DataFileReader {
@@ -43,6 +45,41 @@ public class DataFileReader {
 		//System.out.println(m.getStdDeviation(Arrays.asList(1.0,2.0,3.0,4.0)));
 		
 		System.out.println(m.getCovariance(Arrays.asList(1.0,2.0,3.0,4.0), Arrays.asList(6.0,7.0,8.0,9.0)));
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		int featureCount = 100;
+		int featureElementCount = 10000;
+		
+		ArrayList<ArrayList<Double>> features = new ArrayList<>();
+		
+		while(featureCount-- > 0) {
+			features.add(new ArrayList<Double>());
+		}
+		
+		Iterator<ArrayList<Double>> featureIterator = features.iterator();
+		
+		while(featureIterator.hasNext()) {
+			List<Double> currentList = featureIterator.next();
+			int elementsCreated = 0;
+			while(elementsCreated++ != featureElementCount) {
+				currentList.add(Math.random()*100);
+			}
+		}
+		
+		Matrix<Double> n;
+		Metrics metrics = new Metrics();
+		n = metrics.getCovarianceMatrixConcurrently(features);
+		
+		
+		
 	}
 
 	public Path getDataFolderPath() {

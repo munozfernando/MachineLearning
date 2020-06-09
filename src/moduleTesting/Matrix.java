@@ -31,11 +31,13 @@ public class Matrix<T>{
 			throw new IllegalArgumentException();
 		
 		this.DIMENSIONS = dimensions;
+		// Init with cap. of dimensions
 		this.data = new ArrayList<ArrayList<T>>(dimensions);
-		
+		// Add a set number of new ArrayLists
 		while(dimensions-- > 0) 
-			data.add(new ArrayList<T>());
+			data.add(new ArrayList<>());
 		
+		int j = 0;
 		//initMatrixData();
 	}
 	

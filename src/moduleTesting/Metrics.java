@@ -50,14 +50,15 @@ public class Metrics {
 
 	public static double getMean(List<? extends Number> elements) {
 
-		double temp = elements.stream().mapToDouble(x -> (double)x).average().getAsDouble();
+		double temp = elements.stream().mapToDouble(x -> (double) x).average().getAsDouble();
 		return temp;
 	}
 
-	public static double getVariance(List<? extends Number> values) {
+	public static double getVariance(List<? extends Number> elements) {
 
-		double mean = getMean(values);
-		double variance = values.stream().mapToDouble(x -> (Math.pow((double)x - mean, 2))).sum() / (values.size() - 1);
+		double mean = getMean(elements);
+		double variance = elements.stream().mapToDouble(x -> (Math.pow((double) x - mean, 2))).sum()
+				/ (elements.size() - 1);
 		return variance;
 	}
 
@@ -91,82 +92,93 @@ public class Metrics {
 
 	/**
 	 * This this is fucked. Its really complex and it might have too much overhead.
-	 * I will create another method just like this one, but execute it series and compare...
+	 * I will create another method just like this one, but execute it series and
+	 * compare...
+	 * 
 	 * @param features
 	 * @return
 	 */
-	 public <T extends Number> Matrix<Double> getCovarianceMatrixConcurrently(List<List<T>> features) {
+	public <T extends Number, L extends List<T>> Matrix<Double> getCovarianceMatrixConcurrently(List<L> features) {
 
-		 /*
-		  * This is the plan
-		  * 1. Create an executor
-		  * 2. Feed Futures into the executor
-		  * 3. Check if all futures have been completed
-		  * 4. Return the cov matrix
-		  */
-		 
-		// 1
-		ExecutorService execService = Executors.newCachedThreadPool();
-		Matrix<Future<Double>> futuresMatrix = new Matrix<>(features.size());
-		List<Future<Double>> futuresList = new ArrayList<>();
-		
-		// 2
-		for (int i = 0; i < features.size(); i++) {
-			ArrayList<Future<Double>> covRow = new ArrayList<>();
-			// For a staggered array, put i+1 here
-			for (int j = 0; j < features.size(); j++) {
-				final List<T> vec1 = features.get(i);
-				final List<T> vec2 = features.get(j);
-				
-				Callable<Double> covarianceCallable = new Callable<Double>() {
-					@Override
-					public Double call() throws Exception {
-						return getCovariance(vec1, vec2);
+		int count = 100;
+		for (int k = 1; k < count; k++) {
+
+			/*
+			 * This is the plan 1. Create an executor 2. Feed Futures into the executor 3.
+			 * Check if all futures have been completed 4. Return the covariance matrix
+			 */
+			long startTimeA = System.currentTimeMillis();
+			// 1
+			ExecutorService execService = Executors.newFixedThreadPool(k);
+			Matrix<Future<Double>> futuresMatrix = new Matrix<>(features.size());
+			List<Future<Double>> futuresList = new ArrayList<>();
+			// 2
+			for (int i = 0; i < features.size(); i++) {
+				ArrayList<Future<Double>> covRow = new ArrayList<>();
+				// For a staggered array, put i+1 here
+				for (int j = 0; j < features.size(); j++) {
+					final List<T> vec1 = features.get(i);
+					final List<T> vec2 = features.get(j);
+
+					Callable<Double> covarianceCallable = new Callable<Double>() {
+						@Override
+						public Double call() throws Exception {
+							return getCovariance(vec1, vec2);
+						}
+					};
+					Future<Double> submittedFuture = execService.submit(covarianceCallable);
+					covRow.add(submittedFuture);
+					futuresList.add(submittedFuture);
+				}
+				futuresMatrix.setRow(i, covRow);
+			}
+			execService.shutdown();
+
+			// 3
+			// Block this thread while we ensure all other threads have finished
+			// NOTE: Should be unnecessary, since when calling future.get(), this thread
+			// blocks anyway...
+//		boolean hasRunningThread = true;
+//		while(hasRunningThread) {
+//			hasRunningThread = false;
+//			for(Iterator<Future<Double>> futureIter = futuresList.iterator(); futureIter.hasNext() && hasRunningThread == false;) {
+//				if(!futureIter.next().isDone()) {
+//					hasRunningThread = true;
+//				}
+//			}
+//		}
+
+			// 4
+			// Map the old matrix into a new one of actual values...
+			Iterator<Future<Double>> futListIter = futuresList.iterator();
+			Matrix<Double> resultSetMatrix = new Matrix<>(features.size());
+
+			for (int i = 0; i < futuresMatrix.getDimensions(); i++) {
+				for (int j = 0; j < futuresMatrix.getDimensions(); j++) {
+					try {
+						resultSetMatrix.getRow(i).add(futListIter.next().get());
+					} catch (InterruptedException e) {
+						// TODO Auto-generated catch block
+						e.printStackTrace();
+					} catch (ExecutionException e) {
+						// TODO Auto-generated catch block
+						e.printStackTrace();
 					}
-				};
-				Future<Double> submittedFuture = execService.submit(covarianceCallable);
-				covRow.add(submittedFuture);
-				futuresList.add(submittedFuture);
-			}
-			futuresMatrix.setRow(i, covRow);
-		}
-		execService.shutdown();
-		
-		// 3
-		// Block this thread while we ensure all other threads have finished
-		// NOTE: Should be unnecessary, since when calling future.get(), this thread blocks anyway...
-		boolean hasRunningThread = true;
-		while(hasRunningThread) {
-			hasRunningThread = false;
-			for(Iterator<Future<Double>> futureIter = futuresList.iterator(); futureIter.hasNext() && hasRunningThread == false;) {
-				if(!futureIter.next().isDone()) {
-					hasRunningThread = true;
 				}
 			}
+
+			long elapsedA = System.currentTimeMillis() - startTimeA;
+			
+			System.out.println("****************************************");
+			System.out.println("TESTING: " + k + " THREADS");
+			System.out.println("Concurrent time: "+ elapsedA);
+			int i = 0;
+
 		}
-		
-		// 4
-		// Map the old matrix into a new one of actual values...
-		Iterator<Future<Double>> futListIter = futuresList.iterator();
-		final Matrix<Double> resultSetMatrix = new Matrix<>(features.size());
-		
-		for(int i = 0; i < futuresMatrix.getDimensions(); i++) {
-			if(futListIter.hasNext()) {
-				try {
-					resultSetMatrix.getRow(i).add(futListIter.next().get());
-				} catch (InterruptedException e) {
-					// TODO Auto-generated catch block
-					e.printStackTrace();
-				} catch (ExecutionException e) {
-					// TODO Auto-generated catch block
-					e.printStackTrace();
-				}
-			}
-		}
-		
 		// Print the matrix and return
-		System.out.println(resultSetMatrix);
-		return resultSetMatrix;
+		//System.out.println(resultSetMatrix);
+		//return resultSetMatrix;
+		return null;
 	}
 
 	public double getAccuracy() {
