@@ -8,6 +8,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.stream.Collectors;
 
 public class Metrics {
 
@@ -53,6 +54,10 @@ public class Metrics {
 		double temp = elements.stream().mapToDouble(x -> (double) x).average().getAsDouble();
 		return temp;
 	}
+	
+	public static List<Double> getMeanList( List<? extends List<? extends Number>> list){
+		return list.stream().map(e -> getMean(e)).collect(Collectors.toList());
+	}
 
 	public static double getVariance(List<? extends Number> elements) {
 
@@ -70,7 +75,7 @@ public class Metrics {
 		return getStdDeviation(getVariance(elements));
 	}
 
-	public <T extends Number> double getCovariance(List<T> vec1, List<T> vec2) {
+	public static <T extends Number> double getCovariance(List<T> vec1, List<T> vec2) {
 
 		if (vec1.size() != vec2.size() || vec1.size() < 1)
 			throw new IllegalArgumentException();
@@ -91,94 +96,63 @@ public class Metrics {
 	}
 
 	/**
-	 * This this is fucked. Its really complex and it might have too much overhead.
-	 * I will create another method just like this one, but execute it series and
-	 * compare...
-	 * 
-	 * @param features
-	 * @return
+	 * This method returns a co-variance matrix that compares all features against each other.
+	 * Runs concurrently.
+	 * @param <T> Type of actual data 
+	 * @param <L> Type for outer data list
+	 * @param features Nested List for data param T
+	 * @return Matrix with covariance values
 	 */
-	public <T extends Number, L extends List<T>> Matrix<Double> getCovarianceMatrixConcurrently(List<L> features) {
+	public static <T extends Number, L extends List<T>> Matrix<Double> getCovarianceMatrixConcurrently(List<L> features) {
 
-		int count = 100;
-		for (int k = 1; k < count; k++) {
+		// 1
+		ExecutorService execService = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
+		Matrix<Future<Double>> futuresMatrix = new Matrix<>(features.size());
+		List<Future<Double>> futuresList = new ArrayList<>();
+		
+		// 2
+		for (int i = 0; i < features.size(); i++) {
+			ArrayList<Future<Double>> covRow = new ArrayList<>();
+			// For a staggered array, put i+1 here
+			for (int j = 0; j < features.size(); j++) {
+				final List<T> vec1 = features.get(i);
+				final List<T> vec2 = features.get(j);
 
-			/*
-			 * This is the plan 1. Create an executor 2. Feed Futures into the executor 3.
-			 * Check if all futures have been completed 4. Return the covariance matrix
-			 */
-			long startTimeA = System.currentTimeMillis();
-			// 1
-			ExecutorService execService = Executors.newFixedThreadPool(k);
-			Matrix<Future<Double>> futuresMatrix = new Matrix<>(features.size());
-			List<Future<Double>> futuresList = new ArrayList<>();
-			// 2
-			for (int i = 0; i < features.size(); i++) {
-				ArrayList<Future<Double>> covRow = new ArrayList<>();
-				// For a staggered array, put i+1 here
-				for (int j = 0; j < features.size(); j++) {
-					final List<T> vec1 = features.get(i);
-					final List<T> vec2 = features.get(j);
-
-					Callable<Double> covarianceCallable = new Callable<Double>() {
-						@Override
-						public Double call() throws Exception {
-							return getCovariance(vec1, vec2);
-						}
-					};
-					Future<Double> submittedFuture = execService.submit(covarianceCallable);
-					covRow.add(submittedFuture);
-					futuresList.add(submittedFuture);
-				}
-				futuresMatrix.setRow(i, covRow);
-			}
-			execService.shutdown();
-
-			// 3
-			// Block this thread while we ensure all other threads have finished
-			// NOTE: Should be unnecessary, since when calling future.get(), this thread
-			// blocks anyway...
-//		boolean hasRunningThread = true;
-//		while(hasRunningThread) {
-//			hasRunningThread = false;
-//			for(Iterator<Future<Double>> futureIter = futuresList.iterator(); futureIter.hasNext() && hasRunningThread == false;) {
-//				if(!futureIter.next().isDone()) {
-//					hasRunningThread = true;
-//				}
-//			}
-//		}
-
-			// 4
-			// Map the old matrix into a new one of actual values...
-			Iterator<Future<Double>> futListIter = futuresList.iterator();
-			Matrix<Double> resultSetMatrix = new Matrix<>(features.size());
-
-			for (int i = 0; i < futuresMatrix.getDimensions(); i++) {
-				for (int j = 0; j < futuresMatrix.getDimensions(); j++) {
-					try {
-						resultSetMatrix.getRow(i).add(futListIter.next().get());
-					} catch (InterruptedException e) {
-						// TODO Auto-generated catch block
-						e.printStackTrace();
-					} catch (ExecutionException e) {
-						// TODO Auto-generated catch block
-						e.printStackTrace();
+				Callable<Double> covarianceCallable = new Callable<Double>() {
+					@Override
+					public Double call() throws Exception {
+						return getCovariance(vec1, vec2);
 					}
+				};
+				Future<Double> submittedFuture = execService.submit(covarianceCallable);
+				covRow.add(submittedFuture);
+				futuresList.add(submittedFuture);
+			}
+			futuresMatrix.setRow(i, covRow);
+		}
+		execService.shutdown();
+
+		// 3 & 4
+		// Map the old matrix into a new one of actual values...
+		Iterator<Future<Double>> futListIter = futuresList.iterator();
+		Matrix<Double> resultSetMatrix = new Matrix<>(features.size());
+
+		for (int i = 0; i < futuresMatrix.getDimensions(); i++) {
+			for (int j = 0; j < futuresMatrix.getDimensions(); j++) {
+				try {
+					resultSetMatrix.getRow(i).add(futListIter.next().get());
+				} catch (InterruptedException | ExecutionException e) {
+					System.out.println("Thread was interrupted or failed to execute");
+					e.printStackTrace();
+					System.exit(-1);
 				}
 			}
-
-			long elapsedA = System.currentTimeMillis() - startTimeA;
-			
-			System.out.println("****************************************");
-			System.out.println("TESTING: " + k + " THREADS");
-			System.out.println("Concurrent time: "+ elapsedA);
-			int i = 0;
-
 		}
+
 		// Print the matrix and return
-		//System.out.println(resultSetMatrix);
-		//return resultSetMatrix;
-		return null;
+		System.out.println(resultSetMatrix);
+		return resultSetMatrix;
+
 	}
 
 	public double getAccuracy() {

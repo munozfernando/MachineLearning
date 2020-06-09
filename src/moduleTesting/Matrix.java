@@ -2,6 +2,7 @@ package moduleTesting;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.List;
 
 /**
  * @author Fernando Munoz
@@ -36,20 +37,6 @@ public class Matrix<T>{
 		// Add a set number of new ArrayLists
 		while(dimensions-- > 0) 
 			data.add(new ArrayList<>());
-		
-		int j = 0;
-		//initMatrixData();
-	}
-	
-	// Since we are using reference values, this is a no-go
-	private void initMatrixData(T initialValue) {
-		data.forEach(e -> {
-			int i = 0;
-			while(i < this.DIMENSIONS) {
-				e.add(initialValue);
-				i++;
-			}
-		});
 	}
 	
 	public ArrayList<ArrayList<T>> getData() {
@@ -76,7 +63,9 @@ public class Matrix<T>{
 		return data.get(rowNdx);
 	}
 
-	public void setRow(int rowNdx, ArrayList<T> sourceRow) {
+	public void setRow(int rowNdx, ArrayList<T> sourceRow) throws Exception {
+		if(sourceRow.size() != this.DIMENSIONS)
+			throw new IllegalArgumentException();
 		this.data.set(rowNdx, sourceRow);
 	}
 
@@ -86,12 +75,13 @@ public class Matrix<T>{
 	 * @param sourceColumn an ArrayList to use as source
 	 * @throws Exception
 	 */
-	public void setColumn(int colNdx, ArrayList<T> sourceColumn) throws Exception {
-		if (sourceColumn.size() != this.data.size())
-			throw new Exception();
+	public void setColumn(int colNdx, ArrayList<T> sourceList) throws Exception {
+		if (sourceList.size() != this.data.size())
+			throw new IllegalArgumentException("Column source length does not match the target");
+		
 		for (int i = 0; i < this.data.size(); i++) {
 			ArrayList<T> current = this.data.get(i);
-			current.set(colNdx, sourceColumn.get(i));
+			current.set(colNdx, sourceList.get(i));
 		}
 	}
 

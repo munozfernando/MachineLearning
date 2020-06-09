@@ -1,17 +1,14 @@
 package moduleTesting;
 
 import java.io.File;
-import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Random;
 import java.util.Scanner;
 
 public class DataFileReader {
@@ -55,8 +52,10 @@ public class DataFileReader {
 		
 		
 		
-		int featureCount = 100;
-		int featureElementCount = 10000;
+		int featureCount = 1000;
+		int featureElementCount = 1000;
+		
+		
 		
 		ArrayList<ArrayList<Double>> features = new ArrayList<>();
 		
@@ -74,10 +73,51 @@ public class DataFileReader {
 			}
 		}
 		
-		Matrix<Double> n;
-		Metrics metrics = new Metrics();
-		n = metrics.getCovarianceMatrixConcurrently(features);
+		Metrics.getCovarianceMatrixConcurrently(features);
 		
+		ArrayList<Double> a1 = new ArrayList<Double>() {
+			{
+				add(4.0);
+				add(4.2);
+				add(3.9);
+				add(4.3);
+				add(4.1);
+			}
+		};
+		
+
+		ArrayList<Double> a2 = new ArrayList<Double>() {
+			{
+				add(2.0);
+				add(2.1);
+				add(2.0);
+				add(2.1);
+				add(2.2);
+			}
+		};
+		
+
+		ArrayList<Double> a3 = new ArrayList<Double>() {
+			{
+				add(0.60);
+				add(0.59);
+				add(0.58);
+				add(0.62);
+				add(0.63);
+			}
+		};
+		
+		ArrayList<ArrayList<Double>> matcher = new ArrayList<ArrayList<Double>>() {
+			{
+				add(a1);
+				add(a2);
+				add(a3);
+			}
+		};
+		
+		Metrics.getCovarianceMatrixConcurrently(matcher);
+
+		System.out.println(Metrics.getMeanList(matcher));
 		
 		
 	}
